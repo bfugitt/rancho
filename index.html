@@ -27,6 +27,15 @@
         }
         .animate-pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         
+        @keyframes dart {
+            0% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(25px, -15px) scale(1.1); }
+            50% { transform: translate(-10px, -30px) scale(1); }
+            75% { transform: translate(-25px, 15px) scale(0.9); }
+            100% { transform: translate(0, 0) scale(1); }
+        }
+        .animate-dart { animation: dart 2s ease-in-out infinite alternate; }
+
         /* Prevent selecting text while clicking rapidly or dragging */
         .select-none { user-select: none; }
     </style>
@@ -67,10 +76,20 @@
           const [growthTimer, setGrowthTimer] = useState(GROWTH_INTERVAL);
           const [eventTimer, setEventTimer] = useState(EVENT_CHANCE_INTERVAL);
           
-          // Mini-game State
-          const [miniGameActive, setMiniGameActive] = useState(false);
-          const [miniGameScore, setMiniGameScore] = useState(0);
-          const [miniGameTimer, setMiniGameTimer] = useState(0);
+          // Hide Toss State
+          const [hideTossActive, setHideTossActive] = useState(false);
+          const [hideTossScore, setHideTossScore] = useState(0);
+          const [hideTossTimer, setHideTossTimer] = useState(0);
+
+          // Rodeo State
+          const [rodeoActive, setRodeoActive] = useState(false);
+          const [rodeoScore, setRodeoScore] = useState(0);
+          const [rodeoTimer, setRodeoTimer] = useState(0);
+          const [rodeoTargets, setRodeoTargets] = useState([]);
+
+          // Random Opportunity States
+          const [fandangoAvailable, setFandangoAvailable] = useState(false);
+          const [rodeoAvailable, setRodeoAvailable] = useState(false);
 
           // Splash Screen and Popups
           const [gameStarted, setGameStarted] = useState(false);
@@ -96,7 +115,7 @@
 
           // --- GAME LOOP ---
           useEffect(() => {
-            if (miniGameActive || !gameStarted) return;
+            if (hideTossActive || rodeoActive || !gameStarted) return;
 
             const timer = setInterval(() => {
               // 1. Ship Timers
@@ -147,18 +166,26 @@
               setEventTimer(prev => {
                 if (prev <= 1) {
                   const roll = Math.random();
-                  if (roll < 0.20) { 
+                  if (roll < 0.15) { 
                     setCattle(c => Math.max(2, c - 3)); 
                     addLog("Adversity! A Grizzly Bear attacked the herd! Lost 3 cattle.", "bad");
                     triggerPopup("Grizzly Bear Attack! -3 Cattle", "🐻", "bg-red-600");
-                  } else if (roll < 0.35) {
+                  } else if (roll < 0.25) {
                     setGrowthTimer(20); 
                     addLog("Adversity! A severe drought has hit. Grass is scarce.", "bad");
                     triggerPopup("Severe Drought! Growth stalled.", "☀️", "bg-yellow-500");
-                  } else if (roll < 0.45 && !shipPresent) {
+                  } else if (roll < 0.35 && !shipPresent) {
                      setShipTimer(2);
                      addLog("Favorable winds! A ship is arriving early!", "good");
                      triggerPopup("Favorable Winds! Ship arriving early!", "💨", "bg-blue-500");
+                  } else if (roll < 0.50 && !fandangoAvailable) {
+                     setFandangoAvailable(true);
+                     addLog("Special Occasion! Your family is preparing a Fandango.", "info");
+                     triggerPopup("Fandango Time! Check your Rancho.", "🎸", "bg-rose-500");
+                  } else if (roll < 0.65 && !rodeoAvailable) {
+                     setRodeoAvailable(true);
+                     addLog("It's time for the Rodeo! Gather the unbranded cattle.", "info");
+                     triggerPopup("Rodeo Time! Check your Rancho.", "🐎", "bg-orange-600");
                   }
                   return EVENT_CHANCE_INTERVAL;
                 }
@@ -168,26 +195,91 @@
             }, 1000); 
 
             return () => clearInterval(timer);
-          }, [shipPresent, workers, miniGameActive, gameStarted, addLog, triggerPopup]);
+          }, [shipPresent, workers, hideTossActive, rodeoActive, gameStarted, fandangoAvailable, rodeoAvailable, addLog, triggerPopup]);
 
           // --- MINI-GAME LOGIC ---
           useEffect(() => {
             let interval;
-            if (miniGameActive && miniGameTimer > 0) {
-              interval = setInterval(() => setMiniGameTimer(t => t - 1), 1000);
-            } else if (miniGameActive && miniGameTimer === 0) {
-              setHides(h => h + miniGameScore);
-              addLog(`Cliff Toss complete! You successfully loaded ${miniGameScore} hides.`, "good");
-              setMiniGameActive(false);
+            if (hideTossActive && hideTossTimer > 0) {
+              interval = setInterval(() => setHideTossTimer(t => t - 1), 1000);
+            } else if (hideTossActive && hideTossTimer === 0) {
+              setHides(h => h + hideTossScore);
+              addLog(`Cliff Toss complete! You successfully loaded ${hideTossScore} hides.`, "good");
+              setHideTossActive(false);
             }
             return () => clearInterval(interval);
-          }, [miniGameActive, miniGameTimer, miniGameScore, addLog]);
+          }, [hideTossActive, hideTossTimer, hideTossScore, addLog]);
 
-          const startMiniGame = () => {
-            setMiniGameScore(0);
-            setMiniGameTimer(10);
-            setMiniGameActive(true);
+          const startHideToss = () => {
+            setHideTossScore(0);
+            setHideTossTimer(10);
+            setHideTossActive(true);
           };
+
+          // --- RODEO LOGIC ---
+          const generateTargets = (num) => {
+            return Array.from({length: num}, () => ({
+                id: Math.random().toString(),
+                icon: Math.random() > 0.3 ? '🐄' : '🐎',
+                top: `${10 + Math.random() * 75}%`,
+                left: `${10 + Math.random() * 75}%`,
+                animationDelay: `${Math.random()}s`
+            }));
+          };
+
+          const startRodeo = () => {
+            setRodeoScore(0);
+            setRodeoTimer(10);
+            setRodeoTargets(generateTargets(8));
+            setRodeoActive(true);
+            setRodeoAvailable(false);
+          };
+
+          const catchAnimal = (id) => {
+            setRodeoScore(s => s + 1);
+            setRodeoTargets(targets => targets.filter(t => t.id !== id));
+          };
+
+          // Rodeo Countdown
+          useEffect(() => {
+            if (rodeoActive && rodeoTimer > 0) {
+                const timer = setTimeout(() => setRodeoTimer(t => t - 1), 1000);
+                return () => clearTimeout(timer);
+            }
+          }, [rodeoActive, rodeoTimer]);
+
+          // Rodeo Replenish & End Game
+          useEffect(() => {
+            if (rodeoActive && rodeoTargets.length < 4 && rodeoTimer > 0) {
+                setRodeoTargets(prev => [...prev, ...generateTargets(5)]);
+            }
+
+            if (rodeoActive && rodeoTimer === 0) {
+                setRodeoActive(false);
+                setRodeoScore(finalScore => {
+                    const cattleGained = Math.floor(finalScore / 3);
+                    const prestigeGained = finalScore >= 5 ? 1 : 0;
+                    
+                    setCattle(c => Math.min(workers * CATTLE_PER_WORKER, c + cattleGained));
+                    if (prestigeGained > 0) setPrestige(p => p + prestigeGained);
+                    
+                    addLog(`Rodeo complete! Caught ${finalScore} animals. Gained ${cattleGained} Cattle${prestigeGained > 0 ? ' and 1 Prestige' : ''}.`, "good");
+                    return finalScore; 
+                });
+            }
+          }, [rodeoActive, rodeoTimer, rodeoTargets.length, workers, addLog]);
+
+          // Rodeo Expiration Timer
+          useEffect(() => {
+            let timeout;
+            if (rodeoAvailable) {
+              timeout = setTimeout(() => {
+                setRodeoAvailable(false);
+                addLog("You missed the Rodeo! The strays wandered off.", "warn");
+              }, 10000); // 10 seconds to click the button
+            }
+            return () => clearTimeout(timeout); // Cleans up the timer if they click it in time
+          }, [rodeoAvailable, addLog]);
 
           // --- PLAYER ACTIONS ---
           const processCattle = () => {
@@ -223,6 +315,7 @@
               setCattle(c => c - 2); 
               setPrestige(p => p + 3);
               addLog(`Hosted a grand Fandango for your ${family} family members! (+3 Prestige)`, "good");
+              setFandangoAvailable(false);
             }
           };
 
@@ -264,10 +357,19 @@
                       <span className="text-xs font-normal opacity-80">-1 Hide, -3 Tallow</span>
                     </button>
 
-                    <button onClick={hostFandango} disabled={cattle < 5} className="bg-rose-500 hover:bg-rose-600 disabled:bg-gray-300 disabled:text-gray-500 text-white p-3 rounded-lg font-bold text-sm shadow flex justify-between items-center transition-transform active:scale-95">
-                      <span>🎸 Host Fandango</span>
-                      <span className="text-xs font-normal opacity-80">-2 Cattle (+3 Prestige)</span>
-                    </button>
+                    {fandangoAvailable && (
+                      <button onClick={hostFandango} disabled={cattle < 5} className="bg-rose-500 hover:bg-rose-600 disabled:bg-gray-300 disabled:text-gray-500 text-white p-3 rounded-lg font-bold text-sm shadow flex justify-between items-center transition-transform active:scale-95 animate-fade-in border-2 border-rose-300">
+                        <span>🎸 Host Fandango</span>
+                        <span className="text-xs font-normal opacity-80">-2 Cattle (+3 Prestige)</span>
+                      </button>
+                    )}
+
+                    {rodeoAvailable && (
+                      <button onClick={startRodeo} className="bg-orange-600 hover:bg-orange-700 text-white p-3 rounded-lg font-bold text-sm shadow flex justify-between items-center transition-transform active:scale-95 animate-fade-in border-2 border-orange-300">
+                        <span>🐎 Start Rodeo!</span>
+                        <span className="text-xs font-normal opacity-80">Catch stray cattle!</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* Column 2: The Coast / Trade */}
@@ -304,7 +406,7 @@
                           ))}
                         </div>
 
-                        <button onClick={startMiniGame} className="bg-cyan-500 hover:bg-cyan-600 text-white p-2 rounded-lg font-bold text-sm shadow flex justify-center items-center gap-2 mt-2 border-b-4 border-cyan-700 active:border-b-0 active:translate-y-1 transition-all">
+                        <button onClick={startHideToss} className="bg-cyan-500 hover:bg-cyan-600 text-white p-2 rounded-lg font-bold text-sm shadow flex justify-center items-center gap-2 mt-2 border-b-4 border-cyan-700 active:border-b-0 active:translate-y-1 transition-all">
                           🌊 Play: Dana Point Hide Toss!
                         </button>
                       </div>
@@ -337,12 +439,12 @@
 
                 </div>
 
-                {/* --- MINI GAME MODAL --- */}
-                {miniGameActive && (
+                {/* --- HIDE TOSS MODAL --- */}
+                {hideTossActive && (
                   <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
                     <div className="bg-blue-50 rounded-2xl p-6 max-w-md w-full text-center border-4 border-cyan-400 shadow-2xl relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-full h-2 bg-gray-200">
-                        <div className="h-full bg-cyan-500 transition-all duration-1000" style={{ width: `${(miniGameTimer / 10) * 100}%` }}></div>
+                        <div className="h-full bg-cyan-500 transition-all duration-1000" style={{ width: `${(hideTossTimer / 10) * 100}%` }}></div>
                       </div>
                       
                       <h2 className="text-2xl font-black text-blue-900 mt-2 mb-2">Cliff Hide Toss!</h2>
@@ -351,7 +453,7 @@
                       </p>
 
                       <div className="text-5xl mb-4 font-black text-cyan-600 border-4 border-cyan-200 rounded-full w-24 h-24 mx-auto flex items-center justify-center bg-white shadow-inner">
-                        {miniGameTimer}s
+                        {hideTossTimer}s
                       </div>
 
                       <div className="flex justify-around items-center my-8 bg-blue-100 p-4 rounded-xl border border-blue-200 shadow-inner">
@@ -376,7 +478,7 @@
                           onDrop={(e) => {
                             e.preventDefault();
                             if (e.dataTransfer.getData('text/plain') === 'hide') {
-                              setMiniGameScore(s => s + 1);
+                              setHideTossScore(s => s + 1);
                             }
                           }}
                           className="text-6xl bg-blue-300 w-28 h-28 rounded-full flex flex-col items-center justify-center border-4 border-dashed border-blue-500 shadow-inner"
@@ -386,7 +488,46 @@
                         </div>
                       </div>
 
-                      <div className="text-lg font-bold text-gray-700 mb-2">Hides Loaded: <span className="text-3xl text-amber-600">{miniGameScore}</span></div>
+                      <div className="text-lg font-bold text-gray-700 mb-2">Hides Loaded: <span className="text-3xl text-amber-600">{hideTossScore}</span></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* --- RODEO MODAL --- */}
+                {rodeoActive && (
+                  <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 cursor-crosshair">
+                    <div className="bg-orange-50 rounded-2xl p-6 max-w-2xl w-full text-center border-4 border-amber-600 shadow-2xl relative overflow-hidden h-[60vh] flex flex-col">
+                      <div className="absolute top-0 left-0 w-full h-2 bg-gray-200">
+                        <div className="h-full bg-orange-500 transition-all duration-1000" style={{ width: `${(rodeoTimer / 10) * 100}%` }}></div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center mb-2 z-10 relative bg-white/50 p-2 rounded-xl backdrop-blur-sm">
+                        <h2 className="text-2xl font-black text-orange-900">Rodeo!</h2>
+                        <div className="text-2xl font-black text-orange-600 bg-white px-4 py-1 rounded-full border-2 border-orange-200">
+                          {rodeoTimer}s
+                        </div>
+                        <div className="text-lg font-bold text-gray-700">Caught: <span className="text-2xl text-amber-600">{rodeoScore}</span></div>
+                      </div>
+                      
+                      <p className="text-sm text-orange-800 mb-4 z-10 relative">
+                        Click the animals as fast as you can to catch them!
+                      </p>
+
+                      <div className="flex-1 relative bg-amber-100/50 rounded-xl border-2 border-amber-200 shadow-inner overflow-hidden">
+                         {rodeoTargets.map(t => (
+                            <div 
+                              key={t.id}
+                              onMouseDown={(e) => {
+                                 e.preventDefault();
+                                 catchAnimal(t.id);
+                              }}
+                              className={`absolute ${t.size || 'text-5xl'} cursor-crosshair animate-dart hover:scale-110 active:scale-75 transition-transform`}
+                              style={{ top: t.top, left: t.left, animationDelay: t.animationDelay }}
+                            >
+                              {t.icon}
+                            </div>
+                         ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -412,7 +553,8 @@
                         <p>🐄 <strong>Grow Your Herd:</strong> Your cattle will multiply naturally over time. Don't process them all, or your herd won't grow!</p>
                         <p>🟫 <strong>The Hide Trade:</strong> Process cattle to get Hides ("California Banknotes") and Tallow (fat).</p>
                         <p>⚓ <strong>Trade Ships:</strong> Wait for ships from Boston to arrive. Trade your hides and tallow for luxury goods to earn <strong>Prestige</strong>.</p>
-                        <p>🪶 <strong>Manage Your Rancho:</strong> Hire Native Workers (Vaqueros) to manage larger herds, and host Fandangos for your family.</p>
+                        <p>🪶 <strong>Manage Your Rancho:</strong> Hire Native Workers (Vaqueros) to manage larger herds.</p>
+                        <p>🎸 <strong>Special Events:</strong> Keep an eye out for randomly occurring Rodeos and Fandangos to boost your herd and prestige!</p>
                         <p>⚠️ <strong>Watch Out:</strong> Beware of grizzly bear attacks and severe droughts!</p>
                       </div>
 
